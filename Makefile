@@ -45,15 +45,18 @@ integration:
 	TELEGRAM_TEST_TOKEN="$$(sed -n 's/.*bot_token: "\(.*\)"/\1/p' $(CONFIG))" \
 	go test -run Integration ./...
 
-# 镜像名在两处出现：Makefile 从 git 远端推导，docker-compose.yml 里写死默认值。
-# 这个断言保证两者不会悄悄漂移（仓库改名或 fork 后最容易忘掉一处）。
+# 镜像名在多个 compose 文件里各有写死的默认值：Makefile 从 git 远端推导，
+# compose 只能靠 ${IMAGE:-...} 的静态默认值。这个断言保证它们不会悄悄漂移
+# （仓库改名或 fork 后最容易忘掉其中一处）。
 check-image:
 	@derived='$(IMAGE)'; \
-	composed=$$(sed -nE 's/.*IMAGE:-([^}]+).*/\1/p' docker-compose.yml | head -1); \
-	if [ "$$derived" != "$$composed" ]; then \
-		echo "镜像名不一致：Makefile 推导出 $$derived，docker-compose.yml 默认值是 $$composed"; \
-		exit 1; \
-	fi; \
+	for f in docker-compose.yml docker-compose.portainer.yml; do \
+		composed=$$(sed -nE 's/.*IMAGE:-([^}]+).*/\1/p' $$f | head -1); \
+		if [ "$$derived" != "$$composed" ]; then \
+			echo "镜像名不一致：Makefile 推导出 $$derived，$$f 默认值是 $$composed"; \
+			exit 1; \
+		fi; \
+	done; \
 	echo "镜像名一致：$$derived"
 
 # 构建容器镜像。VERSION 默认取根目录 VERSION 文件（make VERSION=... 可覆盖）。

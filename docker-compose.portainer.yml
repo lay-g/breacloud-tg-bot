@@ -1,0 +1,55 @@
+# BreaCloud Telegram Bot —— Portainer Stack 部署
+#
+# 与根目录 docker-compose.yml 的差异，都是 Portainer 环境绕不开的：
+#   - 没有 build:，只用 registry 上已推送的镜像（Portainer 没有本仓库的工作目录）
+#   - 没有 env_file: .env，凭据在 Stack 的 Environment variables 面板里填
+#   - 命名卷显式固定 name，删除 stack 重新部署后还是同一个卷，白名单与设置不丢
+#
+# 用法：
+#   1. Stacks → Add stack → Web editor，粘贴本文件
+#   2. 在 Environment variables 里填（不带引号）：
+#        BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+#        BREACLOUD_TG_BOT_BREACLOUD_API_TOKEN=bll_...
+#      可选（不确定就留空，默认值见下）：
+#        BREACLOUD_TG_BOT_TELEGRAM_OWNER_CHAT_ID=<首个白名单 chat id，默认 0 表示未设置>
+#        TZ=<通知时区，默认 Asia/Shanghai>
+#        VERSION=<镜像标签，默认 latest；想钉版本就填 v0.1.0>
+#      env 变量的完整清单见 .env.example。
+#   3. Deploy the stack
+#
+# 镜像是同一个仓库名 ghcr.io/<owner>/<repo>；ghcr 上的包默认私有，
+# 私有时要先在 Portainer 的 Registries 里添加 ghcr.io 凭据，否则拉取 401。
+#
+# 同一个 Bot token 不能被两个进程同时长轮询：本机若还跑着 systemd 服务或另一份
+# 容器，先停掉再部署（service stop / docker compose down）。
+
+services:
+  bot:
+    image: ${IMAGE:-ghcr.io/lay-g/breacloud-tg-bot}:${VERSION:-latest}
+    # Portainer 可能连的是 Swarm，Swarm 下不认 restart:，用 deploy 部分代替。
+    # 本地 Docker（大多数情况）直接用上面的 restart。
+    restart: unless-stopped
+    deploy:
+      restart_policy:
+        condition: any
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # 数据库落在命名卷里，容器重建不丢白名单、设置与预警去重状态
+      BREACLOUD_TG_BOT_DATABASE_PATH: /data/bot.db
+      BREACLOUD_TG_BOT_LOG_LEVEL: ${LOG_LEVEL:-info}
+      # 没填这两个必需项时让部署直接失败并指名变量，而不是让容器起来又退出
+      BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN: ${BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN:?在 Stack 的 Environment variables 里填写 bot token}
+      BREACLOUD_TG_BOT_BREACLOUD_API_TOKEN: ${BREACLOUD_TG_BOT_BREACLOUD_API_TOKEN:?在 Stack 的 Environment variables 里填写 BreaCloud API token}
+      BREACLOUD_TG_BOT_TELEGRAM_OWNER_CHAT_ID: ${BREACLOUD_TG_BOT_TELEGRAM_OWNER_CHAT_ID:-0}
+    volumes:
+      - bot-data:/data
+    # Portainer 部署的容器长期运行，不设上限的话 json 日志会把宿主盘写满
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot-data:
+    name: breacloud-tg-bot-data

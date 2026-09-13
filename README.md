@@ -60,6 +60,19 @@ Token 需要勾选这些接口权限（scope）：
 
     docker compose run --rm bot serve --dry-run --run-now
 
+### Portainer
+
+Portainer 的 stack 在它自己的临时目录里执行 compose，既不能构建镜像也读不到仓库里的
+`.env`，所以用单独一份 [`docker-compose.portainer.yml`](docker-compose.portainer.yml)：
+
+1. Stacks → Add stack → Web editor，粘贴该文件内容；
+2. 在 Environment variables 里填两个必填项（`BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN`、
+   `BREACLOUD_TG_BOT_BREACLOUD_API_TOKEN`），可选项见文件头部注释；
+3. Deploy the stack。
+
+数据同样落在命名卷里（名字固定为 `breacloud-tg-bot-data`）。ghcr 上的包是私有的话，
+先在 Registries 里添加 ghcr.io 凭据，否则拉取会 401。
+
 ### 发布镜像
 
 版本号只有一个来源：仓库根目录的 `VERSION` 文件（形如 `v0.1.0`，开发中是 `v0.1.0-dev`）。

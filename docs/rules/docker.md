@@ -70,3 +70,13 @@
     docker run --rm -v bot-data:/data golang:1.27-bookworm ls -ln /data
 
 **相关文件**：`Dockerfile`
+
+## Portainer stack 里 `build:` 与 `env_file: .env` 都不可用
+
+**现象**：把根目录 `docker-compose.yml` 原样粘进 Portainer 的 Web editor，部署直接失败：`env file .env not found`（compose 在 Portainer 的临时目录里执行），或者镜像拉不下来（`build: context: .` 在 Portainer 里没有构建上下文）。
+
+**原因**：Portainer 只保存 compose 文本，没有本仓库的工作目录，因此相对路径的 `env_file`、`build` 全部失效；镜像只能从 registry 拉。
+
+**解决**：Portainer 用单独的 `docker-compose.portainer.yml`——去掉 `build:` 与 `env_file:`，凭据改在 Stack 的 Environment variables 面板填写、由 `${VAR}` 引用；命名卷显式写 `name:`，这样 stack 改名重建也还是同一个卷。ghcr 上的包是私有的话要先在 Portainer 的 Registries 里加凭据。
+
+**相关文件**：`docker-compose.portainer.yml`、`README.md`
