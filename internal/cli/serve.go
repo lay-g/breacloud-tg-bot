@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/lay-g/breacloud-tg-bot/internal/config"
+	"github.com/lay-g/breacloud-tg-bot/internal/store"
 	"github.com/lay-g/breacloud-tg-bot/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -56,6 +57,19 @@ func runServe(ctx context.Context, cfg *config.Config, dryRun, runNow bool) erro
 	fmt.Printf("  数据库:   %s\n", cfg.Database.Path)
 	fmt.Printf("  dry-run:  %v\n", dryRun)
 	slog.Info("服务启动", "version", version.Version, "dry_run", dryRun, "run_now", runNow)
+
+	st, err := store.Open(cfg.Database.Path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	// 仅在白名单为空时用配置里的 owner 兜底，避免用户主动移除后被重启加回来。
+	if err := st.SeedOwnerIfEmpty(ctx, cfg.Telegram.OwnerChatID); err != nil {
+		return err
+	}
+	if chats, err := st.Chats(ctx); err == nil {
+		slog.Info("白名单已加载", "chats", len(chats))
+	}
 
 	if runNow {
 		// M6 起这里调用日报任务；当前阶段仅证明配置与启动链路可用。

@@ -76,7 +76,9 @@ Schema 用单文件、全部 `CREATE TABLE IF NOT EXISTS`，启动时执行一�
 
 `Open()` 会执行一次 `INSERT OR IGNORE INTO settings (id, updated_at) VALUES (1, ?)`，保证单行设置总是存在，`Settings()` 不需要处理「查不到」的分支。
 
-白名单同理：启动时把配置文件里的 `telegram.owner_chat_id` 用 `INSERT OR IGNORE` 播种进 `chats`。用户之后用 `/deny` 移除它，重启**不会**把它加回来——这正是 `INSERT OR IGNORE` 而不是「不存在就插入并删除多余项」的原因。
+白名单的引导同理：启动时调用 `SeedOwnerIfEmpty(owner_chat_id)`，**只在 `chats` 表为空时**才把配置里的 chat id 播种进去。
+
+为什么是「为空才播种」而不是「总是 upsert」：用户主动把某个 chat `/deny` 掉之后，重启不应该把它加回来。而「为空才播种」额外提供了一条防线——万一把自己也移除了导致白名单空，重启就能从配置文件恢复，不会把自己锁在外面。
 
 ## 方法语义
 
