@@ -8,14 +8,20 @@
 
     cli ──> config, systemd
      │
-     └──> serve ─┬─> bot     Telegram 交互
-                 ├─> jobs    定时任务
-                 └─> notify  通知接口
+     └──> serve ─┬─> bot     Telegram 交互（实现 notify.Notifier）
+                 ├─> jobs    定时任务与预警文案
+                 └─> notify  Notifier 接口 + dry-run 实现
                         │
                         ├─> breacloud   HTTP 客户端
-                        └─> store       SQLite
+                        ├─> store       SQLite
+                        └─> humanize    展示格式化
 
-依赖单向向下。`bot` 与 `jobs` 都依赖 `breacloud` 与 `store`，但彼此不互相依赖——它们之间唯一的耦合是 `notify.Notifier` 接口，因此定时任务可以在没有 Telegram 的环境下完整测试与运行（`serve --dry-run`）。
+依赖单向向下。`bot` 与 `jobs` 都依赖 `breacloud` 与 `store`，但彼此不互相依赖——它们之间只有两条连接：
+
+- `jobs` 通过 `notify.Notifier` 发送，`bot` 实现这个接口；
+- `bot` 的 `/report` 通过注入的 `bot.ReportFunc` 调用 `jobs.BuildDailyReport`，由 `serve` 完成接线。
+
+因此定时任务可以在没有 Telegram 的环境下完整测试与运行（`serve --dry-run`），而两个包之间没有 import 关系。
 
 ## 模块一览
 
@@ -25,11 +31,12 @@
 | config | `internal/config` | 配置加载、默认值、路径解析、必填校验 | 已实现 |
 | systemd | `internal/systemd` | 用户级单元文件渲染与 `systemctl --user` 调用 | 已实现 |
 | version | `internal/version` | 构建期注入的版本信息 | 已实现 |
-| store | `internal/store` | SQLite schema、sqlc 查询、业务读写方法 | 设计中 |
-| breacloud | `internal/breacloud` | BreaCloud API 客户端、并发与重试、服务列表缓存 | 设计中 |
-| bot | `internal/bot` | Telegram 启动、菜单、访问控制、视图与回调 | 设计中 |
-| jobs | `internal/jobs` | 调度器、日报、到期提醒、流量预警 | 设计中 |
-| notify | `internal/notify` | 通知接口（`bot` 与 dry-run 各一份实现） | 设计中 |
+| store | `internal/store` | SQLite schema、sqlc 查询、业务读写方法 | 已实现 |
+| breacloud | `internal/breacloud` | BreaCloud API 客户端、并发与重试、服务列表缓存 | 已实现 |
+| bot | `internal/bot` | Telegram 启动、菜单、访问控制、交互视图与回调 | 已实现 |
+| jobs | `internal/jobs` | 调度器、日报、到期提醒、流量预警，以及这些推送的文案 | 已实现 |
+| notify | `internal/notify` | 通知接口（`bot` 与 dry-run 各一份实现） | 已实现 |
+| humanize | `internal/humanize` | 公用的展示格式化：字节、时间、开关状态 | 已实现 |
 
 ## 跨模块不变量
 

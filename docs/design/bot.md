@@ -8,11 +8,13 @@
 
 ## 文件划分
 
-- `bot.go`：启动、选项装配、`Send` / `Broadcast`（实现 `notify.Notifier`）。
+- `bot.go`：启动、选项装配、更新分发、访问控制、`Send` / `Broadcast`（实现 `notify.Notifier`）。
+- `settings_panel.go`：设置项的纯函数修改逻辑（`applySetting`）。
+- `vps.go`：区域列表、VPS 详情、电源操作与任务查看。
 - `menu.go`：`SetMyCommands`，让客户端输入框出现命令列表。
 - `handlers.go`：命令处理。
 - `callbacks.go`：按钮回调处理。
-- `views.go`：纯文本渲染，输入数据、输出字符串，可单测。
+- `views.go`：交互界面的纯文本渲染（菜单、VPS 列表、详情、设置、任务），输入数据、输出字符串，可单测。日报与预警的文案不在这里，它们在 `internal/jobs/views.go`——那是任务自身的产物，不是交互界面的一部分。
 - `keyboards.go`：`models.InlineKeyboardMarkup` 构造。
 
 ## 启动顺序
