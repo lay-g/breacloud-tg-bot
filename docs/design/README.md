@@ -37,6 +37,7 @@
 | jobs | `internal/jobs` | 调度器、日报、到期提醒、流量预警，以及这些推送的文案 | 已实现 |
 | notify | `internal/notify` | 通知接口（`bot` 与 dry-run 各一份实现） | 已实现 |
 | humanize | `internal/humanize` | 公用的展示格式化：字节、时间、开关状态 | 已实现 |
+| md | `internal/md` | MarkdownV2 转义与实体构造 | 已实现 |
 
 ## 跨模块不变量
 
@@ -45,7 +46,7 @@
 1. **时间口径**：业务日期一律是 BreaCloud 后端本地日 **UTC+8**，代码中用包级 `time.FixedZone("UTC+8", 8*3600)` 固定，不依赖主机时区。主机本地时区只用于“通知时间”这类调度判断。`traffic-history` 的 5 分钟样本时间戳是 UTC，与日桶不同源，不得混用。
 2. **日用量取数**：只用 `range=week` 的日桶。`range=day` 的昨天桶被服务端 24 小时窗口截断，会系统性少算。
 3. **流量单位**：`quota_gb` / `used_gb` 是 GiB，比较时按 `quota_gb << 30`。
-4. **消息为纯文本**：发给 Telegram 的消息一律不设 `parse_mode`，避免服务名、IP、备注里的字符触发 MarkdownV2 转义失败导致整条消息发不出去。
+4. **消息是 MarkdownV2，且必须转义**：所有动态文本过 `md.Escape`（等宽值用 `md.Code`），实体在一行内闭合。漏掉任一环，Telegram 会拒收**整条**消息——不是排版难看，是用户什么都收不到。发送侧有降级为纯文本的兜底，但那只是安全网。
 5. **回调数据格式**：统一为竖线分隔的短字符串（如 `v|<serviceID>`、`ac|<serviceID>|cold_reboot`），单条不超过 64 字节。区域等可能超长的标识一律用排序后的下标引用。
 6. **凭据只在配置文件里**：Telegram token 与 BreaCloud token 只存在于 `~/.config/breacloud-tg-bot/config.yaml`（0600），不进数据库、不写日志、不进版本库。数据库只存可随时重建的状态与设置。
 7. **SQLite 单写者**：`SetMaxOpenConns(1)` + WAL，所有写操作串行化。

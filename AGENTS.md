@@ -28,7 +28,8 @@ BreaCloud 账号的 Telegram 管理机器人（Go）。
 
 完整的跨模块不变量见 `docs/design/README.md`，以下几条尤其容易违反：
 
-- 面向 Telegram 的消息一律不设 `parse_mode`（纯文本）。
+- 面向 Telegram 的消息一律用 MarkdownV2：任何来自接口或用户的动态文本都必须先过 `md.Escape`（或包成 `md.Code`），否则整条消息会被 Telegram 拒收。
+- 任何 MarkdownV2 实体都必须在**一行内**闭合，因为超长消息按行截断。
 - 业务日期一律按 UTC+8 自然日理解；日用量只用 `traffic-history?range=week`，不用 `range=day`。
 - 流量配额单位是 GiB（比较时 `quota_gb << 30`）。
 - `POST /services/:id/actions` 非幂等，禁止自动重试。

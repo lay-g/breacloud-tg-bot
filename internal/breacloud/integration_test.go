@@ -12,17 +12,12 @@ import (
 
 var dayPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
-// resolveTestToken 依次尝试环境变量与默认配置文件，都没有时返回空串。
-func resolveTestToken(t *testing.T) string {
-	t.Helper()
-	if token := os.Getenv("BREACLOUD_TEST_TOKEN"); token != "" {
-		return token
-	}
-	cfg, err := config.LoadOrDefault("")
-	if err != nil {
-		return ""
-	}
-	return cfg.BreaCloud.APIToken
+// resolveTestToken 只认环境变量。
+//
+// 刻意不读配置文件：否则只要本机装过一次，`go test ./...` 就会默认联网跑十几秒，
+// 测试变成依赖网络与账号状态的东西。需要跑时用 `make integration`。
+func resolveTestToken() string {
+	return os.Getenv("BREACLOUD_TEST_TOKEN")
 }
 
 // TestIntegrationRealAPI 打真实 BreaCloud API，全程只读。
@@ -31,12 +26,11 @@ func resolveTestToken(t *testing.T) string {
 //
 //	BREACLOUD_TEST_TOKEN=bll_xxx go test -run Integration ./internal/breacloud/
 //
-// 未设置环境变量时回退读取 ~/.config/breacloud-tg-bot/config.yaml；两者都没有则跳过。
-// 这里绝不下发电源操作。
+// 未设置环境变量时跳过。这里绝不下发电源操作。
 func TestIntegrationRealAPI(t *testing.T) {
-	token := resolveTestToken(t)
+	token := resolveTestToken()
 	if token == "" {
-		t.Skip("未提供 token（BREACLOUD_TEST_TOKEN 或默认配置文件），跳过真实 API 集成测试")
+		t.Skip("未设置 BREACLOUD_TEST_TOKEN，跳过真实 API 集成测试")
 	}
 
 	client := New(config.BreaCloudConfig{

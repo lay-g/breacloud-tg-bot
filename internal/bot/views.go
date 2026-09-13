@@ -7,6 +7,7 @@ import (
 
 	"github.com/lay-g/breacloud-tg-bot/internal/breacloud"
 	"github.com/lay-g/breacloud-tg-bot/internal/humanize"
+	"github.com/lay-g/breacloud-tg-bot/internal/md"
 	"github.com/lay-g/breacloud-tg-bot/internal/store"
 )
 
@@ -20,10 +21,14 @@ const (
 	usageDaysShown = 7
 )
 
+// 渲染约定：本文件里的所有**动态文本**都必须过 md.Escape（或包成 md.Code），
+// 静态模板文字里若出现保留字符则手写转义。另一条必须遵守的规则是
+// 「任何实体都在一行内闭合」，因为 Truncate 是按行截断的。
+
 // RenderWelcome 返回首次使用时的招呼与功能介绍。
 func RenderWelcome() string {
 	return strings.Join([]string{
-		"👋 欢迎使用 BreaCloud 助手",
+		"👋 *欢迎使用 BreaCloud 助手*",
 		"",
 		"我可以帮你管理账号下的 VPS：",
 		"",
@@ -40,19 +45,20 @@ func RenderWelcome() string {
 
 // RenderHelp 返回命令列表。
 func RenderHelp() string {
+	chatID := md.Code("<chat_id>")
 	return strings.Join([]string{
-		"📖 命令列表",
+		"📖 *命令列表*",
 		"",
-		"/menu      主菜单",
-		"/vps       按区域查看 VPS",
-		"/report    立即查看昨日流量报告",
-		"/settings  设置（报告、流量预警、到期预警）",
-		"/help      本帮助",
+		md.Code("/menu") + "      主菜单",
+		md.Code("/vps") + "       按区域查看 VPS",
+		md.Code("/report") + "    立即查看昨日流量报告",
+		md.Code("/settings") + "  设置（报告、流量预警、到期预警）",
+		md.Code("/help") + "      本帮助",
 		"",
-		"管理员命令：",
-		"/allowlist          查看白名单",
-		"/allow <chat_id>    添加白名单",
-		"/deny <chat_id>     移除白名单",
+		"*管理员命令*",
+		md.Code("/allowlist") + "          查看白名单",
+		md.Code("/allow") + " " + chatID + "    添加白名单",
+		md.Code("/deny") + " " + chatID + "     移除白名单",
 		"",
 		"提示：把机器人拉进群是无效的，本机器人只响应私聊。",
 	}, "\n")
@@ -61,7 +67,7 @@ func RenderHelp() string {
 // RenderMainMenu 返回主菜单文案。
 func RenderMainMenu() string {
 	return strings.Join([]string{
-		"🛰 BreaCloud 助手",
+		"🛰 *BreaCloud 助手*",
 		"",
 		"请选择操作：",
 	}, "\n")
@@ -110,9 +116,9 @@ func RenderRegionList(regions []Region, page int) (string, int) {
 	start, end := sliceBounds(page, regionPerPage, len(regions))
 
 	var b strings.Builder
-	b.WriteString("🖥 按区域查看 VPS\n\n")
+	b.WriteString("🖥 *按区域查看 VPS*\n\n")
 	for i := start; i < end; i++ {
-		fmt.Fprintf(&b, "%s · %d 台\n", regions[i].Name, len(regions[i].Services))
+		fmt.Fprintf(&b, "%s · %d 台\n", md.Bold(regions[i].Name), len(regions[i].Services))
 	}
 	if pages > 1 {
 		fmt.Fprintf(&b, "\n第 %d / %d 页", page+1, pages)
@@ -129,73 +135,77 @@ func RenderRegionServices(services []breacloud.Service, page int) (string, int) 
 	page = clampPage(page, pages)
 	start, end := sliceBounds(page, servicePerPage, len(services))
 
-	var b strings.Builder
+	var lines []string
 	for i := start; i < end; i++ {
 		s := services[i]
-		fmt.Fprintf(&b, "%s %s\n", statusIcon(s.Status), s.DisplayName())
+		lines = append(lines, fmt.Sprintf("%s %s", statusIcon(s.Status), md.Bold(s.DisplayName())))
 		if s.PrimaryIP != "" {
-			fmt.Fprintf(&b, "    %s\n", s.PrimaryIP)
+			lines = append(lines, "    "+md.Code(s.PrimaryIP))
 		}
 	}
+	text := strings.Join(lines, "\n")
 	if pages > 1 {
-		fmt.Fprintf(&b, "\n第 %d / %d 页", page+1, pages)
+		text += fmt.Sprintf("\n\n第 %d / %d 页", page+1, pages)
 	}
-	return b.String(), pages
+	return text, pages
 }
 
 // RenderServiceDetail 渲染单台 VPS 的详情与近 7 日用量。
 func RenderServiceDetail(detail breacloud.ServiceDetail, traffic breacloud.Traffic, days []store.DailyUsage) string {
 	s, r := detail.Service, detail.Resource
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n\n", statusIcon(s.Status), s.DisplayName())
-	fmt.Fprintf(&b, "状态：%s\n", statusText(s.Status))
+	lines := []string{
+		fmt.Sprintf("%s %s", statusIcon(s.Status), md.Bold(s.DisplayName())),
+		"",
+		md.Label("状态：", statusText(s.Status)),
+	}
 	if r.PrimaryIP != "" {
-		fmt.Fprintf(&b, "主 IP：%s\n", r.PrimaryIP)
+		lines = append(lines, labelCode("主 IP：", r.PrimaryIP))
 	}
 	if r.IPv6 != "" {
-		fmt.Fprintf(&b, "IPv6：%s\n", r.IPv6)
+		lines = append(lines, labelCode("IPv6：", r.IPv6))
 	}
 	if s.RegionName != "" {
-		fmt.Fprintf(&b, "区域：%s\n", s.RegionName)
+		lines = append(lines, md.Label("区域：", s.RegionName))
 	}
 	if r.NodeName != "" {
-		fmt.Fprintf(&b, "节点：%s\n", r.NodeName)
+		lines = append(lines, md.Label("节点：", r.NodeName))
 	}
 	if r.CPUCores > 0 || r.MemoryMB > 0 || r.DiskGB > 0 {
-		fmt.Fprintf(&b, "配置：%d 核 / %s 内存 / %d GB 磁盘\n",
-			r.CPUCores, humanize.Memory(r.MemoryMB), r.DiskGB)
+		config := fmt.Sprintf("%d 核 / %s 内存 / %d GB 磁盘", r.CPUCores, humanize.Memory(r.MemoryMB), r.DiskGB)
+		lines = append(lines, md.Label("配置：", config))
 	}
 	if s.OSName != "" {
-		fmt.Fprintf(&b, "系统：%s\n", s.OSName)
+		lines = append(lines, md.Label("系统：", s.OSName))
 	}
 	if s.BandwidthMbps > 0 {
-		fmt.Fprintf(&b, "带宽：%d Mbps\n", s.BandwidthMbps)
+		lines = append(lines, md.Label("带宽：", fmt.Sprintf("%d Mbps", s.BandwidthMbps)))
 	}
+	lines = append(lines, "")
 
 	if traffic.Unlimited {
-		fmt.Fprintf(&b, "\n流量：不限量，周期内已用 %s\n", humanize.Bytes(traffic.Total()))
+		lines = append(lines, md.Label("流量：", "不限量，周期内已用 "+humanize.Bytes(traffic.Total())))
 	} else {
-		fmt.Fprintf(&b, "\n流量：%s / %d GB（%.0f%%）\n",
-			humanize.Bytes(traffic.Total()), traffic.QuotaGB, trafficPercent(traffic))
+		usage := fmt.Sprintf("%s / %d GB（%.0f%%）", humanize.Bytes(traffic.Total()), traffic.QuotaGB, trafficPercent(traffic))
+		lines = append(lines, md.Label("流量：", usage))
 		if traffic.PeriodEnd != "" {
-			fmt.Fprintf(&b, "计费周期至：%s\n", humanize.Date(traffic.PeriodEnd))
+			lines = append(lines, md.Label("计费周期至：", humanize.Date(traffic.PeriodEnd)))
 		}
 	}
 
 	if len(days) > 0 {
-		b.WriteString("\n近 7 日用量：\n")
+		lines = append(lines, "", "*近 7 日用量：*")
 		for _, d := range days {
-			fmt.Fprintf(&b, "  %s  %s\n", d.Day, humanize.Bytes(d.InBytes+d.OutBytes))
+			lines = append(lines, fmt.Sprintf("  %s  %s", md.Code(d.Day), md.Escape(humanize.Bytes(d.InBytes+d.OutBytes))))
 		}
 	} else {
-		b.WriteString("\n近 7 日用量：暂无缓存（点「刷新用量」拉取）\n")
+		lines = append(lines, "", "*近 7 日用量：* 暂无缓存（点「刷新用量」拉取）")
 	}
 
 	if s.IsPeriodic() && s.NextDueDate != "" {
-		fmt.Fprintf(&b, "\n到期：%s%s\n", humanize.Date(s.NextDueDate), renewSuffix(s))
+		lines = append(lines, "", md.Label("到期：", humanize.Date(s.NextDueDate)+renewSuffix(s)))
 	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
 // RenderTasks 渲染任务历史。
@@ -207,50 +217,70 @@ func RenderTasks(tasks []breacloud.Task) string {
 	if len(tasks) > show {
 		tasks = tasks[:show]
 	}
-	var b strings.Builder
-	b.WriteString("🧾 最近任务\n\n")
+	lines := []string{"🧾 *最近任务*", ""}
 	for _, t := range tasks {
 		label := t.Label
 		if label == "" {
 			label = t.Op
 		}
-		fmt.Fprintf(&b, "%s %s\n", taskIcon(t.Status), label)
-		fmt.Fprintf(&b, "    创建 %s", humanize.DateTime(t.CreatedAt))
+		when := "创建 " + humanize.DateTime(t.CreatedAt)
 		if t.FinishedAt != "" {
-			fmt.Fprintf(&b, " · 完成 %s", humanize.DateTime(t.FinishedAt))
+			when += " · 完成 " + humanize.DateTime(t.FinishedAt)
 		}
-		b.WriteString("\n")
+		lines = append(lines,
+			fmt.Sprintf("%s %s", taskIcon(t.Status), md.Escape(label)),
+			"    "+md.Escape(when),
+		)
 	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
-// RenderPowerConfirm 渲染电源操作的二次确认。
+// RenderPowerConfirm 渲染电源操作的二次确认。后果用块引用突出，避免误点。
 func RenderPowerConfirm(name string, def powerActionDef) string {
-	return fmt.Sprintf("⚠️ %s\n\n%s\n\n目标：%s", def.Label, def.Warning, name)
+	return strings.Join([]string{
+		fmt.Sprintf("⚠️ %s", md.Bold(def.Label)),
+		"",
+		md.Quote(def.Warning),
+		"",
+		md.Label("目标：", name),
+	}, "\n")
+}
+
+// RenderPowerConfirmFor 按动作名渲染电源确认文案。
+//
+// 供包外调用（构造消息与集成测试）使用：powerActionDef 不导出。
+func RenderPowerConfirmFor(name, action string) (string, bool) {
+	def, ok := powerAction(action)
+	if !ok {
+		return "", false
+	}
+	return RenderPowerConfirm(name, def), true
 }
 
 // RenderSettings 渲染设置面板。
 func RenderSettings(s store.Settings) string {
-	thresholds := s.TrafficThresholds
-	parts := make([]string, 0, len(thresholds))
-	for _, t := range thresholds {
+	parts := make([]string, 0, len(s.TrafficThresholds))
+	for _, t := range s.TrafficThresholds {
 		parts = append(parts, fmt.Sprintf("%d%%", t))
 	}
 	return strings.Join([]string{
-		"⚙️ 设置",
+		"⚙️ *设置*",
 		"",
-		fmt.Sprintf("每日报告：%s", humanize.OnOff(s.ReportEnabled)),
-		fmt.Sprintf("通知时间：%s（本机时区）", s.ReportTime),
+		md.Label("每日报告：", humanize.OnOff(s.ReportEnabled)),
+		md.Label("通知时间：", s.ReportTime+"（本机时区）"),
 		"",
-		fmt.Sprintf("流量预警：%s", humanize.OnOff(s.TrafficAlertEnabled)),
-		fmt.Sprintf("预警阈值：%s", strings.Join(parts, "、")),
+		md.Label("流量预警：", humanize.OnOff(s.TrafficAlertEnabled)),
+		md.Label("预警阈值：", strings.Join(parts, "、")),
 		"",
-		fmt.Sprintf("到期预警：%s", humanize.OnOff(s.ExpiryAlertEnabled)),
-		fmt.Sprintf("提前天数：%d 天", s.ExpiryDays),
+		md.Label("到期预警：", humanize.OnOff(s.ExpiryAlertEnabled)),
+		md.Label("提前天数：", fmt.Sprintf("%d 天", s.ExpiryDays)),
 	}, "\n")
 }
 
-// Truncate 保证消息不超过 Telegram 的长度上限：超长时按行截断并说明还剩多少行。
+// Truncate 保证消息不超过 Telegram 的长度上限。
+//
+// 按行截断，因此要求「任何实体都在一行内闭合」——这是本包渲染函数的硬约束，
+// 否则截断会切开一个未闭合的实体，导致整条消息被 Telegram 拒收。
 func Truncate(text string) string {
 	if len(text) <= maxMessageChars {
 		return text
@@ -269,6 +299,11 @@ func Truncate(text string) string {
 }
 
 // ---------- 小工具 ----------
+
+// labelCode 生成「加粗标签 + 等宽值」的一行，用于 IP 这类适合等宽展示的值。
+func labelCode(label, raw string) string {
+	return "*" + label + "* " + md.Code(raw)
+}
 
 func statusIcon(status string) string {
 	switch status {

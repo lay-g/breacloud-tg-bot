@@ -17,6 +17,7 @@ import (
 
 	"github.com/lay-g/breacloud-tg-bot/internal/breacloud"
 	"github.com/lay-g/breacloud-tg-bot/internal/config"
+	"github.com/lay-g/breacloud-tg-bot/internal/md"
 	"github.com/lay-g/breacloud-tg-bot/internal/notify"
 	"github.com/lay-g/breacloud-tg-bot/internal/store"
 )
@@ -216,6 +217,7 @@ func TestBuildDailyReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildDailyReport: %v", err)
 	}
+	plain := md.Unescape(text)
 	for _, want := range []string{
 		"2026-09-12", // 目标是 UTC+8 的昨天，不是今天
 		"60.00 GB",   // 10+30+20
@@ -223,13 +225,17 @@ func TestBuildDailyReport(t *testing.T) {
 		"10.00 GB",   // 第一名
 		"vps-c（Los Angeles）",
 	} {
-		if !strings.Contains(text, want) {
+		if !strings.Contains(plain, want) {
 			t.Errorf("报告缺少 %q:\n%s", want, text)
 		}
 	}
 	// 前一日 5+25+20 = 50 GB，环比 +20%
-	if !strings.Contains(text, "+20.0%") {
+	if !strings.Contains(plain, "+20.0%") {
 		t.Errorf("环比计算异常:\n%s", text)
+	}
+	// 结构与转义：总量标签是粗体；日期放进等宽实体（code 内部只需转义反引号与反斜杠）
+	if !strings.Contains(text, "*全网总量：*") || !strings.Contains(text, "`2026-09-12`") {
+		t.Errorf("MarkdownV2 结构异常:\n%s", text)
 	}
 }
 
@@ -275,11 +281,11 @@ func TestReportCountsFailedServices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildDailyReport: %v", err)
 	}
-	if !strings.Contains(text, "1 台机器") {
+	if !strings.Contains(md.Unescape(text), "1 台机器") {
 		t.Errorf("应标注失败台数:\n%s", text)
 	}
 	// 当天没有日桶的机器是正常情况，不该被算成失败
-	if strings.Contains(text, "2 台机器") {
+	if strings.Contains(md.Unescape(text), "2 台机器") {
 		t.Errorf("无日桶的机器被误判为失败:\n%s", text)
 	}
 }
@@ -311,7 +317,7 @@ func TestTrafficAlertFiresOnceAndRearms(t *testing.T) {
 	if err := BroadcastTrafficAlerts(context.Background(), deps, alerts); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.count() != 1 || !strings.Contains(recorder.last(), "vps-a") {
+	if recorder.count() != 1 || !strings.Contains(md.Unescape(recorder.last()), "vps-a") {
 		t.Fatalf("消息 = %q", recorder.last())
 	}
 
@@ -439,7 +445,8 @@ func TestExpiryCheckWindowsAndSorting(t *testing.T) {
 	if err := BroadcastExpiryAlerts(context.Background(), deps, items, 3); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(recorder.last(), "将自动续费") || !strings.Contains(recorder.last(), "到期释放且不再续费") {
+	plain := md.Unescape(recorder.last())
+	if !strings.Contains(plain, "将自动续费") || !strings.Contains(plain, "到期释放且不再续费") {
 		t.Errorf("文案未区分续费状态:\n%s", recorder.last())
 	}
 }

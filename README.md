@@ -83,6 +83,7 @@ Token 需要勾选这些接口权限（scope）：
 - **日用量只用 `range=week`**：`range=day` 的“昨天”桶会被服务端 24 小时窗口截断，系统性少算约 37%。
 - **流量单位是 GiB**：接口的 `quota_gb` / `used_gb` 是 1024 进制却写作 GB，界面上与面板保持一致。
 - 大账号（数百台）首次全量取数需要几十秒，预警检查间隔不宜低于 1 小时。
+- 消息使用 MarkdownV2，所有动态文本都会转义；万一模板出错，发送侧会降级为纯文本并把错误记进日志。
 
 ## 开发
 
@@ -93,11 +94,18 @@ Token 需要勾选这些接口权限（scope）：
 
 改动 schema 或查询后必须重跑 `make sqlc` 并提交生成结果。
 
-真实 API 的只读集成测试：
+集成测试（真实 BreaCloud API + 真实 Telegram API）：
 
-    BREACLOUD_TEST_TOKEN=bll_xxx go test -run Integration ./internal/breacloud/
+    make integration
 
-未设置该环境变量时会回退读取默认配置文件里的 token，两者都没有则跳过。
+它会从本地配置里读出 token 传给测试：BreaCloud 侧只做只读调用；Telegram 侧只向
+不存在的 chat 发消息，用来校验渲染出来的 MarkdownV2 语法合法。
+
+也可以手工指定：
+
+    BREACLOUD_TEST_TOKEN=bll_xxx TELEGRAM_TEST_TOKEN=123:abc go test -run Integration ./...
+
+两个环境变量都没设置时这些测试自动跳过，因此 `go test ./...` 默认不联网。
 
 文档：
 

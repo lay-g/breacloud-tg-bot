@@ -1,51 +1,55 @@
-# Telegram / go-telegram/bot
+# MarkdownV2 与 Telegram 消息格式
 
-## `MatchTypeCommand` 匹配不了 `/cmd@botname`
+## 未转义的保留字符会让整条消息发不出去
 
-**现象**：用 `bot.WithMessageTextHandler("/start", bot.MatchTypeCommand, h)` 注册，用户在群聊里发送 `/start@某个机器人` 时处理器不触发。
+**现象**：把接口返回的服务名、区域名或错误消息直接拼进文本，`sendMessage` 返回
+`400 Bad Request: can't parse entities: Character '-' is reserved and must be escaped with the preceding '\'`。
+不是渲染错位，是**整条消息被拒收**，用户什么也收不到。
 
-**原因**：库的实现是把消息实体里的命令文本整段与 pattern 比较，`start@botname` 不等于 `start`。
+**原因**：MarkdownV2 要求 `_ * [ ] ( ) ~ \` > # + - = | { } . !` 这 18 个字符在正文里
+必须转义。服务名里的 `-`、日期里的 `.` 和 `-`、`+20%` 里的 `+` 都在射程内。
 
-**解决**：不用命令匹配，改用 `WithDefaultHandler` 收下所有更新，自己按前缀解析命令：切掉开头的 `/`，再切掉 `@` 之后的机器人名。这样 `/start`、`/START`、`/start@bot` 都能落到同一个分支。
+**解决**：
 
-**相关文件**：`internal/bot/bot.go`（`parseCommand`）
+- 所有动态文本进模板前过 `internal/md.Escape`；IP、日期这类适合等宽的用 `md.Code`（code 内部只需转义反引号与反斜杠）。
+- 静态模板文字里手写转义，中文标点优先用全角（`：。！`）以避开保留字符。
+- 发送侧保留兜底：识别到 `can't parse entities` 就降级成纯文本重发一次，宁可难看也不能不发。
 
-## 回调数据有 64 字节上限
+**相关文件**：`internal/md/md.go`、`internal/bot/bot.go`
 
-**现象**：把区域名直接写进回调数据，区域名是中文且较长时可能超限，Telegram 会拒绝整个键盘。
+## markdownv2 的实体不能跨行
 
-**原因**：`callback_data` 硬上限 64 字节。
+**现象**：消息超长时按行截断，截断点正好落在 `*粗体` 中间，整条消息被拒收。
 
-**解决**：回调数据一律用竖线分隔的短标识；区域这类可能超长的对象改用「对区域名排序后的下标」引用，回调时重新取列表并按同一规则排序，下标越界则回一句「列表已更新，请重新打开」。
+**原因**：按字节或按行截断都可能切开一个未闭合的实体。
 
-**相关文件**：`internal/bot/callbacks.go`
+**解决**：约定「任何实体都在一行内闭合」，所有渲染函数都遵守；截断只按整行丢弃。
+这条约定是 `Truncate` 能安全工作的前提，改动渲染函数时必须一起检查。
 
-## 回调消息可能已经不可访问
+**相关文件**：`internal/bot/views.go`、`internal/jobs/views.go`
 
-**现象**：机器人重启或消息过久后点击旧消息上的按钮，取消息内容时拿到的是 `InaccessibleMessage`。
+## 拿真实 Bot API 当 MarkdownV2 校验器
 
-**原因**：Telegram 把过旧的 `message` 替换成只有 id/date 的占位对象。
+**现象**：本地单测只能断言「文本里有没有转义符」，无法证明 Telegram 会接受它。
 
-**解决**：`CallbackQuery.Message` 是 `MaybeInaccessibleMessage`，先判断 `Type` 再取 `Message`；不可访问时只调用一次 `AnswerCallbackQuery` 把客户端的转圈停掉。
+**原因**：MarkdownV2 没有公开的解析库，规则细节（实体嵌套、块引用、代码块）容易记错。
 
-**相关文件**：`internal/bot/bot.go`（`onCallback`）
+**解决**：Telegram **先解析实体、再校验会话**。把消息发到不存在的 `chat_id=1`：
 
-## `editMessageText` 内容完全相同时会报错
+- 语法合法 → `400 chat not found`
+- 语法非法 → `400 can't parse entities: ...`
 
-**现象**：反复点击刷新按钮后，`editMessageText` 返回 `message is not modified` 错误。
+于是可以写一个只为校验而存在的集成测试，覆盖所有渲染函数，且不会打扰任何人。
+测试里还要反过来验证校验器本身可信——故意发一条未闭合的实体，确认它会被判为非法。
 
-**原因**：Telegram 拒绝把消息改成与当前完全一致的内容。
+**相关文件**：`markdown_integration_test.go`
 
-**解决**：`edit` 封装里捕获失败后改为发送一条新消息，用户永远能拿到反馈，而不是点下去没反应。
+## 库里的 ParseMode 常量名有歧义
 
-**相关文件**：`internal/bot/bot.go`（`edit`）
+**现象**：想用 MarkdownV2，看到 `models.ParseModeMarkdown` 和 `models.ParseModeMarkdownV1` 两个常量，很容易选错。
 
-## 消息长度上限 4096，必须主动截断
+**原因**：go-telegram/bot 里 `ParseModeMarkdown` 的值是 `"MarkdownV2"`，`ParseModeMarkdownV1` 才是旧的 `"Markdown"`。
 
-**现象**：大账号下区域/任务列表拼出来超过 4096 字符，整条消息发送失败。
+**解决**：在 `internal/bot` 里定义 `const parseMode = models.ParseModeMarkdown` 并写上注释，避免调用点误用。
 
-**原因**：Telegram 的文本消息上限。
-
-**解决**：所有对外发送的文本都过一次 `Truncate`，超过 3900 字符时按行截断并追加「……另有 N 行未显示」，留出余量。
-
-**相关文件**：`internal/bot/views.go`（`Truncate`）
+**相关文件**：`internal/bot/bot.go`

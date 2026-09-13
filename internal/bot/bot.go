@@ -13,8 +13,15 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/lay-g/breacloud-tg-bot/internal/breacloud"
 	"github.com/lay-g/breacloud-tg-bot/internal/config"
+	"github.com/lay-g/breacloud-tg-bot/internal/md"
 	"github.com/lay-g/breacloud-tg-bot/internal/store"
 )
+
+// parseMode 固定为 MarkdownV2。
+//
+// 注意库里的常量名有坑：models.ParseModeMarkdown 的值其实是 "MarkdownV2"，
+// 而 MarkdownV1 叫 models.ParseModeMarkdownV1。
+const parseMode = models.ParseModeMarkdown
 
 // ReportFunc 生成一份即时报告文本。由 serve 注入 jobs 的实现，避免 bot 直接依赖 jobs。
 type ReportFunc func(ctx context.Context) (string, error)
@@ -76,10 +83,18 @@ func (b *Bot) Run(ctx context.Context) error {
 
 // Send 发给单个 chat，实现 notify.Notifier。
 func (b *Bot) Send(ctx context.Context, chatID int64, text string) error {
+	body := Truncate(text)
 	_, err := b.tg.SendMessage(ctx, &tgbot.SendMessageParams{
-		ChatID: chatID,
-		Text:   Truncate(text),
+		ChatID:    chatID,
+		Text:      body,
+		ParseMode: parseMode,
 	})
+	if isParseError(err) {
+		// 实体的语法错误会让整条消息发不出去。降级成纯文本再试一次，
+		// 保证用户至少看到内容，同时把错误记进日志以便修模板。
+		b.log.Error("MarkdownV2 被拒收，降级为纯文本发送", "error", err)
+		_, err = b.tg.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: chatID, Text: md.Unescape(body)})
+	}
 	return err
 }
 
@@ -244,42 +259,79 @@ func (b *Bot) greetIfNeeded(ctx context.Context, tg *tgbot.Bot, chatID int64) {
 // 白名单为空时没有人能执行 /allow，因此必须同时给出命令行这条自救路径：
 // 带上 chat id 重跑一次 install，服务会重启并把它播种进白名单。
 func UnauthorizedHint(chatID int64) string {
-	return fmt.Sprintf(`🚫 未授权
-
-本机器人仅对白名单内的会话开放。
-
-你的 chat id 是 %d
-
-把它交给管理员后，任选一种方式加入白名单：
-
-· 在已授权的会话里执行
-  /allow %d
-
-· 或在服务器上执行（服务会重启并生效）
-  breacloud-tg-bot service install --chat-id %d --force`, chatID, chatID, chatID)
+	id := strconv.FormatInt(chatID, 10)
+	return strings.Join([]string{
+		"🚫 *未授权*",
+		"",
+		"本机器人仅对白名单内的会话开放。",
+		"",
+		md.Label("你的 chat id 是", id),
+		"",
+		"把它交给管理员后，任选一种方式加入白名单：",
+		"",
+		"· 在已授权的会话里执行",
+		"  " + md.Code("/allow "+id),
+		"",
+		"· 或在服务器上执行（服务会重启并生效）",
+		"  " + md.Code("breacloud-tg-bot service install --chat-id "+id+" --force"),
+	}, "\n")
 }
 
 // send 发送一条新消息。
 func (b *Bot) send(ctx context.Context, tg *tgbot.Bot, chatID int64, text string, markup models.ReplyMarkup) {
-	params := &tgbot.SendMessageParams{ChatID: chatID, Text: Truncate(text)}
+	body := Truncate(text)
+	params := &tgbot.SendMessageParams{ChatID: chatID, Text: body, ParseMode: parseMode}
 	if markup != nil {
 		params.ReplyMarkup = markup
 	}
-	if _, err := tg.SendMessage(ctx, params); err != nil {
+	_, err := tg.SendMessage(ctx, params)
+	if isParseError(err) {
+		b.log.Error("MarkdownV2 被拒收，降级为纯文本发送", "error", err)
+		fallback := &tgbot.SendMessageParams{ChatID: chatID, Text: md.Unescape(body)}
+		if markup != nil {
+			fallback.ReplyMarkup = markup
+		}
+		_, err = tg.SendMessage(ctx, fallback)
+	}
+	if err != nil {
 		b.log.Warn("发送消息失败", "chat_id", chatID, "error", err)
 	}
 }
 
-// edit 就地更新消息。失败时退回发送新消息（例如内容与原来完全相同会被 Telegram 拒绝）。
+// edit 就地更新消息。
+//
+// 两种情况会退回发送新消息：内容与原来完全相同时 Telegram 会拒绝，
+// 以及 MarkdownV2 被拒收时无法就地修复。
 func (b *Bot) edit(ctx context.Context, tg *tgbot.Bot, chatID int64, messageID int, text string, markup models.ReplyMarkup) {
-	params := &tgbot.EditMessageTextParams{ChatID: chatID, MessageID: messageID, Text: Truncate(text)}
+	body := Truncate(text)
+	params := &tgbot.EditMessageTextParams{ChatID: chatID, MessageID: messageID, Text: body, ParseMode: parseMode}
 	if markup != nil {
 		params.ReplyMarkup = markup
 	}
-	if _, err := tg.EditMessageText(ctx, params); err != nil {
-		b.log.Debug("编辑消息失败，改为发送新消息", "error", err)
-		b.send(ctx, tg, chatID, text, markup)
+	_, err := tg.EditMessageText(ctx, params)
+	if err == nil {
+		return
 	}
+	if isParseError(err) {
+		b.log.Error("MarkdownV2 被拒收，降级为纯文本重试", "error", err)
+		fallback := &tgbot.EditMessageTextParams{ChatID: chatID, MessageID: messageID, Text: md.Unescape(body)}
+		if markup != nil {
+			fallback.ReplyMarkup = markup
+		}
+		if _, err = tg.EditMessageText(ctx, fallback); err == nil {
+			return
+		}
+	}
+	b.log.Debug("编辑消息失败，改为发送新消息", "error", err)
+	b.send(ctx, tg, chatID, text, markup)
+}
+
+// isParseError 判断是否为 MarkdownV2 实体解析失败。
+//
+// Telegram 的返回形如：
+// can't parse entities: Character '.' is reserved and must be escaped with the preceding '\'
+func isParseError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "can't parse entities")
 }
 
 // alert 弹出一个一次性提示。

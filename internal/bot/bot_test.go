@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lay-g/breacloud-tg-bot/internal/breacloud"
+	"github.com/lay-g/breacloud-tg-bot/internal/md"
 	"github.com/lay-g/breacloud-tg-bot/internal/store"
 )
 
@@ -223,27 +224,39 @@ func TestRenderServiceDetail(t *testing.T) {
 	}
 
 	text := RenderServiceDetail(detail, traffic, days)
+	// 内容断言在「还原转义之后」的文本上做，避免测试被转义细节淹没
+	plain := md.Unescape(text)
 	for _, want := range []string{
 		"vps-gia-185197", "38.105.28.165", "lax-gia-main-01", "Debian 12",
 		"2000 GB", "2026-09-12", "2027-08-23", "需手动续费",
 	} {
-		if !strings.Contains(text, want) {
+		if !strings.Contains(plain, want) {
 			t.Errorf("详情缺少 %q:\n%s", want, text)
 		}
 	}
 	// 百分比按 GiB 计算：428.3/2000 ≈ 21%
-	if !strings.Contains(text, "21%") {
+	if !strings.Contains(plain, "21%") {
 		t.Errorf("百分比计算异常:\n%s", text)
+	}
+	// 结构断言：标题与标签必须是粗体，IP 必须是等宽
+	for _, want := range []string{"*状态：*", "*流量：*", "`38.105.28.165`", "*主 IP：*"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("MarkdownV2 结构缺少 %q:\n%s", want, text)
+		}
+	}
+	// 动态文本里的保留字符必须被转义，否则整条消息会被 Telegram 拒收
+	if strings.Contains(plain, "vps-gia-185197") && !strings.Contains(text, `vps\-gia\-185197`) {
+		t.Errorf("服务名里的连字符未转义:\n%s", text)
 	}
 }
 
 func TestRenderServiceDetailUnlimited(t *testing.T) {
 	detail := breacloud.ServiceDetail{Service: breacloud.Service{ID: 1, DomainName: "x", Status: "active"}}
 	text := RenderServiceDetail(detail, breacloud.Traffic{Unlimited: true, InBytes: 1024}, nil)
-	if !strings.Contains(text, "不限量") {
+	if !strings.Contains(md.Unescape(text), "不限量") {
 		t.Errorf("不限量服务渲染异常:\n%s", text)
 	}
-	if !strings.Contains(text, "暂无缓存") {
+	if !strings.Contains(md.Unescape(text), "暂无缓存") {
 		t.Errorf("无缓存时应提示:\n%s", text)
 	}
 }
