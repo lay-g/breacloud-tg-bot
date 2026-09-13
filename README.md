@@ -1,5 +1,7 @@
 # breacloud-tg-bot
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 用 Telegram 管理 [BreaCloud](https://brea.cloud) 账号下的 VPS。单账号自托管，Go 编写，零 CGO。
 
 - 按区域查看 VPS，查看状态、配置、主 IP 与近 7 日用量
@@ -67,7 +69,7 @@ Token 需要勾选这些接口权限（scope）：
 推送任意 tag 都会触发 `.github/workflows/docker.yml`，它会用 `GITHUB_TOKEN` 自动构建
 `linux/amd64` 与 `linux/arm64` 两份并推送到 ghcr，镜像标签取自语义化版本：tag `v0.1.0`
 产出 `v0.1.0`、`v0.1`、`latest`；带 `-dev` 的版本只产 `v0.1.0-dev`，不动 `latest`。
-手动触发只产 `sha-xxxx` 和分支名标签，也不动 `latest`。
+手动触发只用 `VERSION` 的值打标签，不产分支名、commit sha 之类的临时标签，也不动 `latest`。
 
 手工推送：
 
@@ -158,3 +160,7 @@ Token 需要勾选这些接口权限（scope）：
 - `docs/references/` — 外部接口参考
 - `docs/rules/` — 踩过的坑与解决办法
 - `AGENTS.md` — 本仓库的开发约定
+
+## 许可
+
+Apache License 2.0，见 [LICENSE](LICENSE)。

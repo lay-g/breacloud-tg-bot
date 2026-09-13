@@ -10,7 +10,8 @@ name: docker
 #
 # 镜像里的版本号取自根目录 VERSION 文件（形如 v0.1.0）；tag 必须与它完全一致，只用来打镜像标签。
 #
-# 手动触发：Actions → docker → Run workflow。
+# 手动触发：Actions → docker → Run workflow，镜像标签同样取自 VERSION（不产分支名、
+# commit sha 之类的临时标签，也不动 latest）。
 # 首次推送后，包默认是私有的；要在别处拉取需要 docker login ghcr.io，
 # 或者到 Packages 设置里改成 public。
 
@@ -90,6 +91,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # merge 需要读 VERSION：手动触发没有版本 tag，镜像标签直接用它。
+      # tag 推送时 build job 已校验 tag 与 VERSION 一致，两种触发都归一到 VERSION。
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
@@ -106,17 +113,17 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          # 版本号带 v 前缀，镜像标签照搬；写了 prefix= 的两行（branch、latest）不带前缀。
+          # 版本号带 v 前缀，镜像标签照搬；写了 prefix= 的两行（VERSION、latest）
+          # 值本身已含 v，不再加前缀。没有分支名、commit sha 之类的临时标签。
           # latest=auto 关掉，latest 只由下面那条显式规则产生：含 -dev 的版本、
-          # 以及手动触发（branch）都不碰它。
+          # 以及手动触发都不碰它。
           flavor: |
             prefix=v
             latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=ref,event=branch,prefix=
-            type=sha,format=short
+            type=raw,value=${{ steps.version.outputs.version }},prefix=,enable=${{ github.ref_type != 'tag' }}
             type=raw,value=latest,prefix=,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-dev') }}
 
       - name: Create multi-arch manifest
