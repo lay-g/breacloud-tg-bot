@@ -12,4 +12,5 @@
 | [go-toolchain.md](go-toolchain.md) | Go 工具链、构建与 lint 环境 |
 | [systemd.md](systemd.md) | systemd 用户服务与 systemctl 交互 |
 | [sqlite.md](sqlite.md) | SQLite / sqlc / modernc 驱动 |
-| [telegram.md](telegram.md) | Telegram Bot API 与 go-telegram/bot |
+| [telegram.md](telegram.md) | Telegram Bot API、MarkdownV2 与 go-telegram/bot |
+| [docker.md](docker.md) | 容器构建、非 root 与卷权限、时区 |

@@ -30,6 +30,7 @@
 | cli | `internal/cli` | 命令解析、参数校验、生命周期编排 | 已实现 |
 | config | `internal/config` | 配置加载、默认值、路径解析、必填校验 | 已实现 |
 | systemd | `internal/systemd` | 用户级单元文件渲染与 `systemctl --user` 调用 | 已实现 |
+| （部署） | `Dockerfile` / `docker-compose.yml` | 容器镜像与 Compose 部署，见 `docs/rules/docker.md` | 已实现 |
 | version | `internal/version` | 构建期注入的版本信息 | 已实现 |
 | store | `internal/store` | SQLite schema、sqlc 查询、业务读写方法 | 已实现 |
 | breacloud | `internal/breacloud` | BreaCloud API 客户端、并发与重试、服务列表缓存 | 已实现 |
@@ -48,7 +49,7 @@
 3. **流量单位**：`quota_gb` / `used_gb` 是 GiB，比较时按 `quota_gb << 30`。
 4. **消息是 MarkdownV2，且必须转义**：所有动态文本过 `md.Escape`（等宽值用 `md.Code`），实体在一行内闭合。漏掉任一环，Telegram 会拒收**整条**消息——不是排版难看，是用户什么都收不到。发送侧有降级为纯文本的兜底，但那只是安全网。
 5. **回调数据格式**：统一为竖线分隔的短字符串（如 `v|<serviceID>`、`ac|<serviceID>|cold_reboot`），单条不超过 64 字节。区域等可能超长的标识一律用排序后的下标引用。
-6. **凭据只在配置文件里**：Telegram token 与 BreaCloud token 只存在于 `~/.config/breacloud-tg-bot/config.yaml`（0600），不进数据库、不写日志、不进版本库。数据库只存可随时重建的状态与设置。
+6. **凭据只在配置文件或环境变量里**：Telegram token 与 BreaCloud token 只存在于 `~/.config/breacloud-tg-bot/config.yaml`（0600）或容器注入的环境变量（`.env`，0600），不进数据库、不写日志、不进版本库、不进容器镜像。数据库只存可随时重建的状态与设置。
 7. **SQLite 单写者**：`SetMaxOpenConns(1)` + WAL，所有写操作串行化。
 8. **重试边界**：只读 GET 可退避重试；`POST /services/:id/actions` 非幂等，不重试，失败直接把错误交给用户。
 9. **输出分工**：日志一律写 stderr（slog），stdout 只留给命令自身的输出，这样 `serve --dry-run` 的输出可以直接管道给其它工具。

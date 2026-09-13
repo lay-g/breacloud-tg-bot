@@ -70,7 +70,11 @@ func runServe(ctx context.Context, cfg *config.Config, opts serveOptions) error 
 	slog.SetDefault(logger)
 
 	fmt.Printf("breacloud-tg-bot %s\n", version.Version)
-	fmt.Printf("  配置文件: %s\n", cfg.Path)
+	if cfg.FromFile() {
+		fmt.Printf("  配置文件: %s\n", cfg.Path)
+	} else {
+		fmt.Printf("  配置来源: 环境变量（%s 不存在）\n", cfg.Path)
+	}
 	fmt.Printf("  API 地址: %s\n", cfg.BreaCloud.BaseURL)
 	fmt.Printf("  数据库:   %s\n", cfg.Database.Path)
 	fmt.Printf("  dry-run:  %v\n", opts.dryRun)
@@ -107,6 +111,7 @@ func runServe(ctx context.Context, cfg *config.Config, opts serveOptions) error 
 	logger.Info("服务启动",
 		"version", version.Version,
 		"dry_run", opts.dryRun,
+		"config_from_file", cfg.FromFile(),
 		"allowlist", len(chats),
 		"traffic_interval", opts.trafficInterval.String())
 

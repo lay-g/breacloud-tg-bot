@@ -1,0 +1,37 @@
+# BreaCloud Telegram Bot —— Docker Compose 部署
+#
+#   1. 准备凭据（只存在宿主机上，以环境变量传给容器）
+#        cp .env.example .env && chmod 600 .env && ${EDITOR:-vi} .env
+#   2. 启动
+#        docker compose up -d && docker compose logs -f
+#
+# 为什么用环境变量而不是挂配置文件：容器以非 root（uid 65532）运行，
+# 挂在宿主机的 0600 配置文件它读不到；放宽到 644 又等于把 token 交给本机所有用户。
+# 环境变量绕开了这个矛盾。
+#
+# 注意：同一个 Bot token 不能被两个进程同时拉取更新。如果本机还跑着 systemd 服务，
+# 先停掉：breacloud-tg-bot service stop
+
+services:
+  bot:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    image: breacloud-tg-bot:${VERSION:-dev}
+    container_name: breacloud-tg-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 通知时间按这个时区计算。容器默认 UTC，不设的话你定的 09:00 会在
+      # 北京时间 17:00 才推送。
+      TZ: ${TZ:-Asia/Shanghai}
+      # 数据库落在命名卷里，容器重建不丢白名单、设置与预警去重状态
+      BREACLOUD_TG_BOT_DATABASE_PATH: /data/bot.db
+      BREACLOUD_TG_BOT_LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - bot-data:/data
+
+volumes:
+  bot-data:

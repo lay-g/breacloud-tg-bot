@@ -42,6 +42,24 @@ Token 需要勾选这些接口权限（scope）：
 
     journalctl --user -u breacloud-tg-bot -f
 
+## Docker 部署
+
+    cp .env.example .env && chmod 600 .env && ${EDITOR:-vi} .env   # 填两个 token
+    docker compose up -d
+    docker compose logs -f
+
+镜像基于 distroless、以非 root 运行、不含 shell，体积约 15 MB。数据落在命名卷 `bot-data` 里，容器重建不丢白名单与设置。
+
+**为什么用 `.env` 而不是挂配置文件**：容器以 uid 65532 运行，挂载宿主机上 0600 的配置文件它读不到，放宽到 644 又等于把 token 交给本机所有用户。环境变量绕开了这个矛盾，所以 Docker 这条路完全不需要配置文件。
+
+只跑一次、不常驻（用于验证凭据与网络）：
+
+    docker compose run --rm bot serve --dry-run --run-now
+
+**同一个 Bot token 不能同时被两个进程拉取更新。** 如果本机还跑着 systemd 服务，用 Docker 之前先 `breacloud-tg-bot service stop`。
+
+时区必须显式设置（compose 文件里默认 `Asia/Shanghai`）：容器默认 UTC，不设的话你定的 09:00 会在北京时间 17:00 才推送。
+
 ## 命令行
 
     breacloud-tg-bot serve [--dry-run] [--run-now] [--traffic-interval 1h]
@@ -72,7 +90,9 @@ Token 需要勾选这些接口权限（scope）：
 
 ## 配置
 
-配置文件默认在 `~/.config/breacloud-tg-bot/config.yaml`，权限 0600，含密钥不要提交。环境变量可以覆盖任何一项，前缀 `BREACLOUD_TG_BOT_`（例如 `BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN`）。
+配置文件默认在 `~/.config/breacloud-tg-bot/config.yaml`，权限 0600，含密钥不要提交。模板见 `config.example.yaml`。
+
+环境变量可以覆盖任何一项，前缀 `BREACLOUD_TG_BOT_`（例如 `BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN`）。**配置文件可以完全不存在**——只用环境变量也能跑，Docker 部署走的就是这条路。
 
 报告开关、通知时间、预警阈值这类可在机器人里改的设置存在 SQLite 的 `settings` 表（默认 `~/.local/share/breacloud-tg-bot/bot.db`），不进配置文件。
 
@@ -87,10 +107,13 @@ Token 需要勾选这些接口权限（scope）：
 
 ## 开发
 
-    make build    # 编译到 bin/
-    make test     # go test ./...
-    make lint     # golangci-lint
-    make sqlc     # 重新生成 sqlc 代码
+    make build       # 编译到 bin/
+    make test        # go test ./...（离线，几秒内跑完）
+    make lint        # golangci-lint
+    make sqlc        # 重新生成 sqlc 代码
+    make integration # 打真实 BreaCloud / Telegram API 的测试
+    make docker      # 构建容器镜像
+    make docker-run  # 在容器里离线跑一次日报
 
 改动 schema 或查询后必须重跑 `make sqlc` 并提交生成结果。
 

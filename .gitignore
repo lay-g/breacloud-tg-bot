@@ -13,6 +13,7 @@
 local.yaml
 .env
 .env.*
+!.env.example
 
 # 测试与调试产物
 *.test

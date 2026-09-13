@@ -33,4 +33,4 @@ BreaCloud 账号的 Telegram 管理机器人（Go）。
 - 业务日期一律按 UTC+8 自然日理解；日用量只用 `traffic-history?range=week`，不用 `range=day`。
 - 流量配额单位是 GiB（比较时 `quota_gb << 30`）。
 - `POST /services/:id/actions` 非幂等，禁止自动重试。
-- 密钥只存在于 `~/.config/breacloud-tg-bot/config.yaml`：不进仓库、不进日志、不进数据库。
+- 密钥只存在于 `~/.config/breacloud-tg-bot/config.yaml`（systemd 部署）或 `.env`（Docker 部署，见 `.env.example`）：不进仓库、不进日志、不进数据库、不进容器镜像。

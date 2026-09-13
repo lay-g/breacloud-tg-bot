@@ -1,0 +1,26 @@
+# 构建上下文里不需要的东西。保持精简可以显著加快构建并避免把密钥带进镜像。
+
+.git
+.gitignore
+.github
+
+# 构建产物：镜像内部会重新编译
+/bin
+/dist
+
+# 本地运行数据与配置
+*.db
+*.db-wal
+*.db-shm
+config.yaml
+.env
+
+# 过程性文档
+docs/plans
+docs/platform-issues
+
+# 编辑器与测试产物
+.vscode
+.idea
+coverage.out
+coverage.html

@@ -70,9 +70,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	dataDir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dataDir)
 
-	cfg, err := LoadOrDefault(filepath.Join(t.TempDir(), "missing.yaml"))
+	cfg, err := Load(filepath.Join(t.TempDir(), "missing.yaml"))
 	if err != nil {
-		t.Fatalf("LoadOrDefault: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 	if cfg.BreaCloud.BaseURL != "https://brea.cloud/api/v1" {
 		t.Errorf("base_url = %q", cfg.BreaCloud.BaseURL)
@@ -88,9 +88,38 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadRequiresFileWhenRequired(t *testing.T) {
-	if _, err := Load(filepath.Join(t.TempDir(), "missing.yaml")); err == nil {
-		t.Fatal("Load 对不存在的文件应返回错误")
+// 配置文件不存在不算读取错误：容器部署常常只用环境变量。
+// 真正该失败的是「值没凑齐」，而且报错要能说清缺的是哪个。
+func TestLoadToleratesMissingFileButValidateFails(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	missing := filepath.Join(t.TempDir(), "missing.yaml")
+
+	cfg, err := Load(missing)
+	if err != nil {
+		t.Fatalf("文件缺失时 Load 不该报错: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("没有任何来源提供 token 时 Validate 应报错")
+	}
+	if !strings.Contains(err.Error(), missing) || !strings.Contains(err.Error(), "不存在") {
+		t.Errorf("报错未说明文件不存在: %v", err)
+	}
+
+	// 环境变量补齐后应当通过校验，这正是容器部署的用法
+	t.Setenv(EnvPrefix+"_TELEGRAM_BOT_TOKEN", "123:abc")
+	t.Setenv(EnvPrefix+"_BREACLOUD_API_TOKEN", "bll_env")
+	t.Setenv(EnvPrefix+"_DATABASE_PATH", "/data/bot.db")
+
+	cfg, err = Load(missing)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("纯环境变量配置应通过校验: %v", err)
+	}
+	if cfg.Database.Path != "/data/bot.db" {
+		t.Errorf("database.path = %q", cfg.Database.Path)
 	}
 }
 

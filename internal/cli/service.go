@@ -73,7 +73,7 @@ func runServiceInstall(botToken, apiToken string, chatID int64, force bool) erro
 	if err != nil {
 		return err
 	}
-	cfg, err := config.LoadOrDefault(cfgPath)
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func newServiceUninstallCmd() *cobra.Command {
 			}
 			var extra []string
 			if purge {
-				cfg, err := config.LoadOrDefault(cfgPath)
+				cfg, err := config.Load(cfgPath)
 				if err != nil {
 					return err
 				}

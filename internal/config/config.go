@@ -48,22 +48,18 @@ type Config struct {
 	BreaCloud BreaCloudConfig
 	Database  DatabaseConfig
 	Log       LogConfig
-	Path      string
+	// Path 是配置文件路径，即使文件不存在也会填上，便于报错时指明位置。
+	Path string
+
+	// fromFile 记录配置是否真的来自文件，仅用于生成更准确的报错信息。
+	fromFile bool
 }
 
 // Load 从 path 加载配置，path 为空时使用 DefaultPath。
-// 配置文件不存在时返回错误，并提示先执行 service install。
+//
+// 配置文件不存在不算错误：容器部署往往只用环境变量，让 Validate 去报告
+// 「到底缺了哪个值」比在读取阶段就失败更有用。
 func Load(path string) (*Config, error) {
-	return load(path, true)
-}
-
-// LoadOrDefault 与 Load 相同，但配置文件不存在时返回默认配置（仅含默认值与环境变量）。
-// 供 service install 在首次安装时复用已有设置。
-func LoadOrDefault(path string) (*Config, error) {
-	return load(path, false)
-}
-
-func load(path string, required bool) (*Config, error) {
 	if path == "" {
 		p, err := DefaultPath()
 		if err != nil {
@@ -88,9 +84,11 @@ func load(path string, required bool) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	fromFile := true
 	switch err := v.ReadInConfig(); {
 	case err == nil:
-	case os.IsNotExist(err) && !required:
+	case os.IsNotExist(err):
+		fromFile = false
 	default:
 		return nil, fmt.Errorf("读取配置文件 %s: %w", path, err)
 	}
@@ -112,7 +110,8 @@ func load(path string, required bool) (*Config, error) {
 		Log: LogConfig{
 			Level: strings.ToLower(v.GetString("log.level")),
 		},
-		Path: path,
+		Path:     path,
+		fromFile: fromFile,
 	}
 	if cfg.BreaCloud.Concurrency < 1 {
 		cfg.BreaCloud.Concurrency = 1
@@ -121,6 +120,12 @@ func load(path string, required bool) (*Config, error) {
 		cfg.BreaCloud.Timeout = 20 * time.Second
 	}
 	return cfg, nil
+}
+
+// FromFile 报告配置是否来自配置文件。容器部署常常只用环境变量，因此界面
+// 与日志需要区分这两种情况。
+func (c *Config) FromFile() bool {
+	return c.fromFile
 }
 
 // Validate 检查启动所必需的值是否齐备。
@@ -136,6 +141,11 @@ func (c *Config) Validate() error {
 		missing = append(missing, "database.path")
 	}
 	if len(missing) > 0 {
+		if !c.fromFile {
+			return fmt.Errorf("配置文件 %s 不存在，环境变量也未提供: %s"+
+				"（可运行 `%s service install` 生成配置，或设置 BREACLOUD_TG_BOT_ 开头的环境变量）",
+				c.Path, strings.Join(missing, ", "), AppName)
+		}
 		return fmt.Errorf("配置 %s 缺少必填项: %s（可运行 `%s service install` 补齐）",
 			c.Path, strings.Join(missing, ", "), AppName)
 	}

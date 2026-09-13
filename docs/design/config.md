@@ -25,10 +25,16 @@
 
 ## 路径
 
-- 配置目录：`os.UserConfigDir()/breacloud-tg-bot`，即 `$XDG_CONFIG_HOME` 或 `~/.config`。
+- 配置目录：`os.UserConfigDir()/breacloud-tg-bot`，即 `$XDG_CONFIG_HOME` 或 `~/.config`。容器里会退化成 `/home/nonroot/.config/...`，因此容器部署一律用环境变量指定数据库位置。
 - 数据目录：`$XDG_DATA_HOME/breacloud-tg-bot`，回退 `~/.local/share`。
 - 数据库：数据目录下的 `bot.db`（WAL 模式会同时产生 `-wal` / `-shm`）。
 - 单元文件：**固定** `~/.config/systemd/user/breacloud-tg-bot.service`，不跟随 `XDG_CONFIG_HOME`，因为 systemd 用户实例只认这个位置。
+
+## 配置文件可以不存在
+
+`Load` 不把「文件缺失」当成错误，只把来源记录下来；真正失败的是 `Validate`，它会一次说清缺了哪些值。这样容器部署可以只用环境变量，而不必为了满足读取逻辑挂一个空文件。
+
+判断依据是 `Config.FromFile()`，启动横幅与日志都会区分「来自文件」和「仅环境变量」，避免排查时误以为读到了某个文件。
 
 ## 校验
 

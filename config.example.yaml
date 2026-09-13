@@ -1,0 +1,32 @@
+# BreaCloud Telegram Bot 配置模板
+#
+# systemd 部署：不用手写，运行 `breacloud-tg-bot service install` 会交互式生成。
+# Docker 部署：复制成 config/config.yaml 后填入两个 token，权限设成 0600。
+#
+# 任何一项都可以用环境变量覆盖，前缀 BREACLOUD_TG_BOT_，层级用下划线连接，
+# 例如 telegram.bot_token 对应 BREACLOUD_TG_BOT_TELEGRAM_BOT_TOKEN。
+# 只用环境变量、完全不要配置文件也是支持的。
+
+telegram:
+  # @BotFather 创建的机器人 token
+  bot_token: "123456:ABC-DEF..."
+  # 首个白名单 chat id，可留空：留空时未授权的会话发送 /start 会收到
+  # 一条包含自己 chat id 的提示，照着提示操作即可
+  owner_chat_id: 0
+
+breacloud:
+  base_url: "https://brea.cloud/api/v1"
+  # BreaCloud 后台创建的 API Token，需要这些 scope：
+  #   client.svc.read.list / read.get / read.traffic / read.traffic_history
+  #   client.svc.read.tasks / power.action
+  api_token: "bll_..."
+  # 并发请求上限。账号机器很多时才是瓶颈，实测值在 docs/design/breacloud.md
+  concurrency: 5
+  timeout: "20s"
+
+database:
+  # 容器里指向挂载的卷
+  path: "/data/bot.db"
+
+log:
+  level: "info"
