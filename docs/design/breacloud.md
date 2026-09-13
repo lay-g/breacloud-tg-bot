@@ -1,7 +1,5 @@
 # breacloud — API 客户端
 
-> 状态：设计中（M3 实现）。接口字段与实测行为见 `docs/references/breacloud-api.md`。
-
 ## 职责
 
 把 BreaCloud 的 HTTP 接口包装成类型安全的 Go 方法，并把三件容易做错的事收敛在一处：统一信封解码、并发与重试策略、分页。上层（`bot` / `jobs`）不应该自己拼 URL、判 `code`、写重试循环。
