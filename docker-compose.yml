@@ -5,20 +5,27 @@
 #   2. 启动
 #        docker compose up -d && docker compose logs -f
 #
+# 镜像默认来自 GitHub Container Registry。想用本地构建的版本：
+#   docker compose build          # 用本仓库源码构建，仍打同一个镜像名
+# 想换版本或换仓库，在 .env 里设置 IMAGE / VERSION 即可：
+#   IMAGE=ghcr.io/lay-g/breacloud-tg-bot
+#   VERSION=v1.0.0
+#
 # 为什么用环境变量而不是挂配置文件：容器以非 root（uid 65532）运行，
 # 挂在宿主机的 0600 配置文件它读不到；放宽到 644 又等于把 token 交给本机所有用户。
-# 环境变量绕开了这个矛盾。
 #
 # 注意：同一个 Bot token 不能被两个进程同时拉取更新。如果本机还跑着 systemd 服务，
 # 先停掉：breacloud-tg-bot service stop
 
 services:
   bot:
+    # 镜像名与仓库一致（ghcr.io/<owner>/<repo>），build 与 image 用同一个名字，
+    # 因此 `docker compose build` 之后 `docker compose up` 用的就是本地那份。
+    image: ${IMAGE:-ghcr.io/lay-g/breacloud-tg-bot}:${VERSION:-latest}
     build:
       context: .
       args:
-        VERSION: ${VERSION:-dev}
-    image: breacloud-tg-bot:${VERSION:-dev}
+        VERSION: ${VERSION:-latest}
     container_name: breacloud-tg-bot
     restart: unless-stopped
     env_file:

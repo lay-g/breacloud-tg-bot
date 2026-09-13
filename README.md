@@ -48,6 +48,8 @@ Token 需要勾选这些接口权限（scope）：
     docker compose up -d
     docker compose logs -f
 
+镜像默认从 GitHub Container Registry 拉取，名字就是仓库本身：`ghcr.io/lay-g/breacloud-tg-bot`。本地没有该镜像时 compose 会用本仓库源码构建一份，并打同一个名字，所以第一次 `docker compose up` 不需要先登录任何 registry。
+
 镜像基于 distroless、以非 root 运行、不含 shell，体积约 15 MB。数据落在命名卷 `bot-data` 里，容器重建不丢白名单与设置。
 
 **为什么用 `.env` 而不是挂配置文件**：容器以 uid 65532 运行，挂载宿主机上 0600 的配置文件它读不到，放宽到 644 又等于把 token 交给本机所有用户。环境变量绕开了这个矛盾，所以 Docker 这条路完全不需要配置文件。
@@ -55,6 +57,18 @@ Token 需要勾选这些接口权限（scope）：
 只跑一次、不常驻（用于验证凭据与网络）：
 
     docker compose run --rm bot serve --dry-run --run-now
+
+### 发布镜像
+
+打 `v*` 标签推送后，`.github/workflows/docker.yml` 会用 `GITHUB_TOKEN` 自动构建
+`linux/amd64` 与 `linux/arm64` 两份并推送到 ghcr，标签取自语义化版本。也可以手动触发。
+
+手工推送：
+
+    docker login ghcr.io -u <你的用户名>     # 密码用有 write:packages 权限的 PAT
+    make docker-push VERSION=v1.0.0
+
+首次推送后包默认是**私有**的；要在别的机器上拉取需要 `docker login ghcr.io`，或到仓库的 Packages 设置里改成 public。
 
 **同一个 Bot token 不能同时被两个进程拉取更新。** 如果本机还跑着 systemd 服务，用 Docker 之前先 `breacloud-tg-bot service stop`。
 
@@ -112,8 +126,10 @@ Token 需要勾选这些接口权限（scope）：
     make lint        # golangci-lint
     make sqlc        # 重新生成 sqlc 代码
     make integration # 打真实 BreaCloud / Telegram API 的测试
-    make docker      # 构建容器镜像
+    make docker      # 构建容器镜像（名字从 git 远端推导）
+    make docker-push # 推送到 ghcr.io
     make docker-run  # 在容器里离线跑一次日报
+    make check-image # 断言 Makefile 与 compose 的镜像名一致
 
 改动 schema 或查询后必须重跑 `make sqlc` 并提交生成结果。
 

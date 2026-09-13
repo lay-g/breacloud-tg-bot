@@ -49,6 +49,16 @@
 
 **相关文件**：`README.md`
 
+## 镜像名有两处来源，容易漂移
+
+**现象**：仓库改名或 fork 之后，Makefile 从 git 远端推导出的镜像名与 `docker-compose.yml` 里写死的默认值不再一致；`make docker` 推的镜像和 compose 拉的不是同一个。
+
+**原因**：Makefile 能读 git 远端，compose 不能——它只能靠 `${IMAGE:-...}` 的静态默认值。
+
+**解决**：保留两处，但加 `make check-image` 断言它们相等，并挂到 `docker` / `docker-push` 前面。仓库改名时这一步会直接失败并指出两个值。
+
+**相关文件**：`Makefile`、`docker-compose.yml`
+
 ## distroless 里没有 shell，排错要用别的镜像
 
 **现象**：`docker exec -it breacloud-tg-bot sh` 报 `exec: "sh": executable file not found`。
