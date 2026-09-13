@@ -1,5 +1,7 @@
 BINARY  := bin/breacloud-tg-bot
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# 版本号只有一个来源：仓库根目录的 VERSION 文件（形如 v0.1.0），发布 tag 必须与它完全一致。
+# make VERSION=v0.2.0 可临时覆盖。
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null)
 
 # 镜像名从 git 远端推导，仓库迁移或 fork 后不需要手改：
@@ -54,7 +56,7 @@ check-image:
 	fi; \
 	echo "镜像名一致：$$derived"
 
-# 构建容器镜像。VERSION 会注入二进制，默认取 git describe。
+# 构建容器镜像。VERSION 默认取根目录 VERSION 文件（make VERSION=... 可覆盖）。
 docker: check-image
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) \
 		-t $(IMAGE):$(VERSION) .

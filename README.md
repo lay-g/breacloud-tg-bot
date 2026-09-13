@@ -60,13 +60,19 @@ Token 需要勾选这些接口权限（scope）：
 
 ### 发布镜像
 
-打 `v*` 标签推送后，`.github/workflows/docker.yml` 会用 `GITHUB_TOKEN` 自动构建
-`linux/amd64` 与 `linux/arm64` 两份并推送到 ghcr，标签取自语义化版本。也可以手动触发。
+版本号只有一个来源：仓库根目录的 `VERSION` 文件（形如 `v0.1.0`，开发中是 `v0.1.0-dev`）。
+二进制里报的版本、`make docker` 打出的镜像标签都取自它。发版时把 `VERSION` 改成发布版本、
+提交，再打一个和它**完全一样**的 tag；CI 会校验，不一致直接失败。
+
+推送任意 tag 都会触发 `.github/workflows/docker.yml`，它会用 `GITHUB_TOKEN` 自动构建
+`linux/amd64` 与 `linux/arm64` 两份并推送到 ghcr，镜像标签取自语义化版本：tag `v0.1.0`
+产出 `v0.1.0`、`v0.1`、`latest`；带 `-dev` 的版本只产 `v0.1.0-dev`，不动 `latest`。
+手动触发只产 `sha-xxxx` 和分支名标签，也不动 `latest`。
 
 手工推送：
 
     docker login ghcr.io -u <你的用户名>     # 密码用有 write:packages 权限的 PAT
-    make docker-push VERSION=v1.0.0
+    make docker-push
 
 首次推送后包默认是**私有**的；要在别的机器上拉取需要 `docker login ghcr.io`，或到仓库的 Packages 设置里改成 public。
 

@@ -53,6 +53,7 @@
 7. **SQLite 单写者**：`SetMaxOpenConns(1)` + WAL，所有写操作串行化。
 8. **重试边界**：只读 GET 可退避重试；`POST /services/:id/actions` 非幂等，不重试，失败直接把错误交给用户。
 9. **输出分工**：日志一律写 stderr（slog），stdout 只留给命令自身的输出，这样 `serve --dry-run` 的输出可以直接管道给其它工具。
+10. **版本号只有一个来源**：仓库根目录的 `VERSION` 文件（形如 `v0.1.0`）。二进制（`make build` 与容器镜像）里的版本都取自它，发布 tag 必须与它完全一致，CI 会校验。
 
 ## 两条主要数据流
 

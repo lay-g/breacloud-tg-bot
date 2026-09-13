@@ -4,7 +4,7 @@
 package version
 
 var (
-	// Version 是语义化版本号或 git describe 的结果，未注入时为 dev。
+	// Version 是语义化版本号（形如 v0.1.0，来自仓库根目录的 VERSION 文件），未注入时为 dev。
 	Version = "dev"
 	// Commit 是构建所用的 git 提交，未注入时为空。
 	Commit = ""

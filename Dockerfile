@@ -5,6 +5,11 @@
 #
 # 用 modernc.org/sqlite 而不是 mattn/go-sqlite3，所以 CGO 关掉也能跑，
 # 镜像里不需要 libc。
+#
+# 不设 GOOS/GOARCH：镜像按本机架构构建。多架构镜像由 CI 在各自架构的 runner
+# 上分别构建，见 .github/workflows/docker.yml。
+#
+# 版本号默认取自根目录 VERSION 文件（形如 v0.1.0）；--build-arg VERSION=v0.2.0 可覆盖。
 
 FROM golang:1.27-bookworm AS build
 
@@ -16,15 +21,12 @@ RUN go mod download
 
 COPY . .
 
-ARG VERSION=dev
+ARG VERSION=
 ARG COMMIT=
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath \
+RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w \
-        -X github.com/lay-g/breacloud-tg-bot/internal/version.Version=${VERSION} \
+        -X github.com/lay-g/breacloud-tg-bot/internal/version.Version=${VERSION:-$(cat VERSION)} \
         -X github.com/lay-g/breacloud-tg-bot/internal/version.Commit=${COMMIT}" \
       -o /out/breacloud-tg-bot .
 
