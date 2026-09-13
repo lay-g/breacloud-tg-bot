@@ -334,3 +334,13 @@ func TestShiftClockKeepsFormat(t *testing.T) {
 		t.Errorf("输出格式不是 HH:MM: %q", got)
 	}
 }
+
+func TestUnauthorizedHintCarriesChatID(t *testing.T) {
+	hint := UnauthorizedHint(-1001234567890)
+	if !strings.Contains(hint, "-1001234567890") {
+		t.Errorf("提示里必须带上 chat id，否则用户没法自助：%q", hint)
+	}
+	if strings.Count(hint, "-1001234567890") < 2 {
+		t.Errorf("应同时给出可直接复制执行的 /allow 命令：%q", hint)
+	}
+}

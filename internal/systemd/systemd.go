@@ -84,8 +84,12 @@ func Install(unitPath string, p UnitParams, force bool) error {
 	if err := runCommand("systemctl", "--user", "daemon-reload"); err != nil {
 		return fmt.Errorf("systemctl --user daemon-reload: %w", err)
 	}
-	if err := runCommand("systemctl", "--user", "enable", "--now", ServiceName); err != nil {
-		return fmt.Errorf("systemctl --user enable --now %s: %w", ServiceName, err)
+	if err := runCommand("systemctl", "--user", "enable", ServiceName); err != nil {
+		return fmt.Errorf("systemctl --user enable %s: %w", ServiceName, err)
+	}
+	// 用 restart 而不是 start：服务未运行时它会启动，已在运行时会把刚写入的配置生效。
+	if err := runCommand("systemctl", "--user", "restart", ServiceName); err != nil {
+		return fmt.Errorf("systemctl --user restart %s: %w", ServiceName, err)
 	}
 	return nil
 }

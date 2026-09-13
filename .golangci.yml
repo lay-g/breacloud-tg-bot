@@ -1,0 +1,15 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # standard 已经包含 errcheck / govet / ineffassign / staticcheck / unused
+  default: standard
+  disable:
+    - depguard
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

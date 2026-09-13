@@ -138,12 +138,17 @@ func (b *Bot) onMessage(ctx context.Context, tg *tgbot.Bot, msg *models.Message)
 	}
 	chatID := msg.Chat.ID
 	text := strings.TrimSpace(msg.Text)
+	cmd, args := parseCommand(text)
 
 	if !b.authorize(ctx, tg, chatID) {
+		// 未授权时只对 /start 与 /menu 回一次带自身 chat id 的提示，
+		// 其它消息静默忽略，避免任何人用这个 Bot 探测它是否存在。
+		if cmd == "start" || cmd == "menu" {
+			b.send(ctx, tg, chatID, UnauthorizedHint(chatID), nil)
+		}
 		return
 	}
 
-	cmd, args := parseCommand(text)
 	switch cmd {
 	case "start":
 		b.send(ctx, tg, chatID, RenderWelcome()+"\n\n"+RenderMainMenu(), kbMainMenu())
@@ -235,9 +240,23 @@ func (b *Bot) greetIfNeeded(ctx context.Context, tg *tgbot.Bot, chatID int64) {
 }
 
 // UnauthorizedHint 返回给未授权 chat 的提示，附带它自己的 chat id。
+//
+// 白名单为空时没有人能执行 /allow，因此必须同时给出命令行这条自救路径：
+// 带上 chat id 重跑一次 install，服务会重启并把它播种进白名单。
 func UnauthorizedHint(chatID int64) string {
-	return fmt.Sprintf("🚫 未授权\n\n本机器人仅对白名单内的会话开放。\n"+
-		"你的 chat id 是 %d，把它交给管理员，在已授权的会话里执行：\n\n/allow %d", chatID, chatID)
+	return fmt.Sprintf(`🚫 未授权
+
+本机器人仅对白名单内的会话开放。
+
+你的 chat id 是 %d
+
+把它交给管理员后，任选一种方式加入白名单：
+
+· 在已授权的会话里执行
+  /allow %d
+
+· 或在服务器上执行（服务会重启并生效）
+  breacloud-tg-bot service install --chat-id %d --force`, chatID, chatID, chatID)
 }
 
 // send 发送一条新消息。

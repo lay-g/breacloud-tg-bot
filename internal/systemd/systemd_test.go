@@ -70,7 +70,8 @@ func TestInstallWritesUnitAndEnables(t *testing.T) {
 
 	want := []string{
 		"systemctl --user daemon-reload",
-		"systemctl --user enable --now " + ServiceName,
+		"systemctl --user enable " + ServiceName,
+		"systemctl --user restart " + ServiceName,
 	}
 	if fmt.Sprint(*calls) != fmt.Sprint(want) {
 		t.Errorf("调用序列 = %v, want %v", *calls, want)
